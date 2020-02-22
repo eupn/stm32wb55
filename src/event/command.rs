@@ -542,6 +542,10 @@ pub enum HalConfigParameter {
     /// [PublicAddress](crate::hal::ConfigParameter::PublicAddress).
     PublicAddress(hci::BdAddr),
 
+    /// Bluetooth random address. Corresponds to
+    /// [RandomAddress](crate::hal::ConfigParameter::RandomAddress).
+    RandomAddress(hci::BdAddr),
+
     /// Diversifier used to derive CSRK (connection signature resolving key).  Corresponds to
     /// [Diversifier](crate::hal::ConfigParameter::Diversifier).
     Diversifier(u16),

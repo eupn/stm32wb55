@@ -306,6 +306,24 @@ impl ConfigData {
     /// [`write_config_data`](Commands::write_config_data).  The builder associated functions allow
     /// us to start with any field, and the returned builder allows only either chaining the next
     /// field or building the structure to write.
+    pub fn random_address(addr: hci::BdAddr) -> ConfigDataDiversifierBuilder {
+        let mut data = Self {
+            offset: 0x2E,
+            length: 6,
+            value_buf: [0; Self::MAX_LENGTH],
+        };
+
+        data.value_buf[0..6].copy_from_slice(&addr.0);
+
+        ConfigDataDiversifierBuilder { data }
+    }
+
+    /// Builder for [ConfigData].
+    ///
+    /// The controller allows us to write any _contiguous_ portion of the [ConfigData] structure in
+    /// [`write_config_data`](Commands::write_config_data).  The builder associated functions allow
+    /// us to start with any field, and the returned builder allows only either chaining the next
+    /// field or building the structure to write.
     pub fn diversifier(d: u16) -> ConfigDataEncryptionRootBuilder {
         let mut data = Self {
             offset: 6,
@@ -537,6 +555,9 @@ pub enum Role {
 pub enum ConfigParameter {
     /// Bluetooth public address.
     PublicAddress = 0,
+
+    /// Bluetooth random address.
+    RandomAddress = 0x2E,
 
     /// Diversifier used to derive CSRK (connection signature resolving key).
     Diversifier = 6,
