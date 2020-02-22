@@ -870,7 +870,7 @@ pub trait Commands {
     ) -> nb::Result<(), Error<Self::Error>>;
 }
 
-impl Commands for crate::RadioCoprocessor {
+impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
     type Error = ();
 
     fn init(&mut self) -> nb::Result<(), Self::Error> {

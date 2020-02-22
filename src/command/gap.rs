@@ -853,7 +853,7 @@ pub trait Commands {
     fn is_device_bonded(&mut self, addr: hci::host::PeerAddrType) -> nb::Result<(), Self::Error>;
 }
 
-impl Commands for crate::RadioCoprocessor {
+impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
     type Error = ();
 
     fn set_nondiscoverable(&mut self) -> nb::Result<(), Self::Error> {

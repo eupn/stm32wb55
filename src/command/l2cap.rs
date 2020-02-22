@@ -51,7 +51,7 @@ pub trait Commands {
     ) -> nb::Result<(), Self::Error>;
 }
 
-impl Commands for crate::RadioCoprocessor {
+impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
     type Error = ();
 
     impl_params!(

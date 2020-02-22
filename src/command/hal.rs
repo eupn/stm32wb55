@@ -176,7 +176,7 @@ pub trait Commands {
     fn get_anchor_period(&mut self) -> nb::Result<(), Self::Error>;
 }
 
-impl Commands for crate::RadioCoprocessor {
+impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
     type Error = ();
 
     fn get_firmware_revision(&mut self) -> nb::Result<(), Self::Error> {

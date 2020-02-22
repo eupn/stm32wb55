@@ -64,22 +64,33 @@ pub use hci::host::{AdvertisingFilterPolicy, AdvertisingType, OwnAddressType};
 
 use stm32wb_hal::tl_mbox;
 use stm32wb_hal::ipcc;
-use stm32wb_hal::tl_mbox::shci::ShciBleInitCmdParam;
+use stm32wb_hal::tl_mbox::{consts::TlPacketType, shci::ShciBleInitCmdParam};
+use hci::event::VendorEvent;
+use crate::event::{Stm32Wb5xEvent, Stm32Wb5xError};
+use stm32wb_hal::tl_mbox::cmd::{CmdPacket, CmdSerial};
+
+const TX_BUF_SIZE: usize = core::mem::size_of::<CmdSerial>();
 
 /// Handle for interfacing with the STM32WB5x radio coprocessor.
-pub struct RadioCoprocessor {
+pub struct RadioCoprocessor<'buf> {
     mbox: tl_mbox::TlMbox,
     ipcc: ipcc::Ipcc,
     config: ShciBleInitCmdParam,
+    evt_buf: cb::Buffer<'buf, u8>,
+    tx_buf: [u8; TX_BUF_SIZE],
+    is_ble_ready: bool,
 }
 
-impl RadioCoprocessor {
+impl<'buf> RadioCoprocessor<'buf> {
     /// Creates a new RadioCoprocessor instance to send commands to and receive events from.
-    pub fn new(mbox: tl_mbox::TlMbox, ipcc: ipcc::Ipcc, config: ShciBleInitCmdParam) -> RadioCoprocessor {
+    pub fn new(buf: &mut [u8], mbox: tl_mbox::TlMbox, ipcc: ipcc::Ipcc, config: ShciBleInitCmdParam) -> RadioCoprocessor {
         RadioCoprocessor {
             mbox,
             ipcc,
-            config
+            config,
+            evt_buf: cb::Buffer::new(buf),
+            tx_buf: [0u8; TX_BUF_SIZE],
+            is_ble_ready: false,
         }
     }
 
@@ -103,30 +114,75 @@ impl RadioCoprocessor {
 
     /// Call this function out of interrupt context, for example in `main()` loop.
     pub fn process_event(&mut self) {
-        while let Some(evt) = self.mbox.dequeue_event() {
+        if let Some(evt) = self.mbox.dequeue_event() {
             let event = evt.evt();
+
+            let buf = self.evt_buf.next_mut_slice(evt.size().expect("Known packet kind"));
+            evt.write(buf).expect("EVT_BUF_SIZE is too small");
+
             if event.kind() == 18 {
                 tl_mbox::shci::shci_ble_init(&mut self.ipcc, self.config);
+                self.is_ble_ready = true;
+                buf[0] = 0x04; // Replace event code with one that is supported by HCI
             }
         }
     }
 }
 
-impl hci::Controller for RadioCoprocessor {
+impl<'buf> hci::Controller for RadioCoprocessor<'buf> {
     type Error = ();
     type Header = bluetooth_hci::host::uart::CommandHeader;
     type Vendor = Stm32Wb5xTypes;
 
     fn write(&mut self, header: &[u8], payload: &[u8]) -> nb::Result<(), Self::Error> {
-        todo!()
+        let cmd_code = header[0];
+        let cmd = TlPacketType::try_from(cmd_code).map_err(|_| ())?;
+
+        self.tx_buf = [0; TX_BUF_SIZE];
+        self.tx_buf[..header.len()].copy_from_slice(header);
+        self.tx_buf[header.len()..(header.len() + payload.len())].copy_from_slice(payload);
+
+        match &cmd {
+            TlPacketType::AclData => {
+                cortex_m_semihosting::hprintln!("Got ACL DATA cmd").unwrap();
+
+                // Destination buffer: ble table, phci_acl_data_buffer, acldataserial field
+                todo!()
+            }
+
+            TlPacketType::SysCmd => {
+                cortex_m_semihosting::hprintln!("Got SYS cmd").unwrap();
+
+                // Destination buffer: SYS table, pcmdbuffer, cmdserial field
+                todo!()
+            }
+
+            _ => {
+                tl_mbox::ble::ble_send_cmd(
+                    &mut self.ipcc,
+                    &self.tx_buf[..],
+                );
+            }
+        }
+
+        Ok(())
     }
 
     fn read_into(&mut self, buffer: &mut [u8]) -> nb::Result<(), Self::Error> {
-        todo!()
+        if buffer.len() <= self.evt_buf.size() {
+            self.evt_buf.take_slice(buffer.len(), buffer);
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
     }
 
     fn peek(&mut self, n: usize) -> nb::Result<u8, Self::Error> {
-        todo!()
+        if n >= self.evt_buf.size() {
+            return Err(nb::Error::WouldBlock)
+        } else {
+            Ok(self.evt_buf.peek(n))
+        }
     }
 }
 
