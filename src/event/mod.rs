@@ -17,13 +17,13 @@ use core::time::Duration;
 pub use hci::types::{ConnectionInterval, ConnectionIntervalError};
 pub use hci::{BdAddr, BdAddrType, ConnectionHandle};
 
-/// Vendor-specific events for the BlueNRG-MS controllers.
+/// Vendor-specific events for the STM32WB5x radio coprocessor.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug)]
 pub enum Stm32Wb5xEvent {
-    /// When the BlueNRG-MS firmware is started normally, it gives this event to the user to
+    /// When the radio coprocessor firmware is started normally, it gives this event to the user to
     /// indicate the system has started.
-    HalInitialized(ResetReason),
+    CoprocessorReady(FirmwareKind),
 
     /// If the host fails to read events from the controller quickly enough, the controller will
     /// generate this event. This event is never lost; it is inserted as soon as space is available
@@ -374,22 +374,12 @@ impl Into<u8> for Status {
 /// Enumeration of potential errors when sending commands or deserializing events.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Stm32Wb5xError {
-    /// The event is not recoginized. Includes the unknown opcode.
+    /// The event is not recognized. Includes the unknown opcode.
     UnknownEvent(u16),
 
-    /// For the [HalInitialized](Stm32Wb5xEvent::HalInitialized) event: the reset reason was not
-    /// recognized. Includes the unrecognized byte.
-    UnknownResetReason(u8),
-
-    /// For the [EventsLost](Stm32Wb5xEvent::EventsLost) event: The event included unrecognized event
-    /// flags. Includes the entire bitfield.
-    #[cfg(feature = "ms")]
-    BadEventFlags(u64),
-
-    /// For the [CrashReport](Stm32Wb5xEvent::CrashReport) event: The crash reason was not
-    /// recognized. Includes the unrecognized byte.
-    #[cfg(feature = "ms")]
-    UnknownCrashReason(u8),
+    /// For the [CoprocessorReady](Stm32Wb5xEvent::CoprocessorReady) event: the kind of firmware
+    /// running on radio coprocessor is not recognized.
+    UnknownFirmwareKind(u8),
 
     /// For the [GAP Pairing Complete](Stm32Wb5xEvent::GapPairingComplete) event: The status was not
     /// recognized. Includes the unrecognized byte.
@@ -576,34 +566,11 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
         require_len_at_least!(buffer, 2);
 
         let event_code = LittleEndian::read_u16(&buffer[0..=1]);
+
         match event_code {
-            0x0001 => Ok(Stm32Wb5xEvent::HalInitialized(to_hal_initialized(buffer)?)),
-            0x0002 => {
-                #[cfg(feature = "ms")]
-                {
-                    Ok(Stm32Wb5xEvent::EventsLost(to_lost_event(buffer)?))
-                }
+            // SHCI "C2 Ready" event
+            0x9200 => Ok(Stm32Wb5xEvent::CoprocessorReady(to_coprocessor_ready(buffer)?)),
 
-                #[cfg(not(feature = "ms"))]
-                {
-                    Err(hci::event::Error::Vendor(Stm32Wb5xError::UnknownEvent(
-                        event_code,
-                    )))
-                }
-            }
-            0x0003 => {
-                #[cfg(feature = "ms")]
-                {
-                    Ok(Stm32Wb5xEvent::CrashReport(to_crash_report(buffer)?))
-                }
-
-                #[cfg(not(feature = "ms"))]
-                {
-                    Err(hci::event::Error::Vendor(Stm32Wb5xError::UnknownEvent(
-                        event_code,
-                    )))
-                }
-            }
             0x0400 => Ok(Stm32Wb5xEvent::GapLimitedDiscoverableTimeout),
             0x0401 => Ok(Stm32Wb5xEvent::GapPairingComplete(to_gap_pairing_complete(
                 buffer,
@@ -746,181 +713,39 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
     }
 }
 
-/// Potential reasons the controller sent the [`HalInitialized`](Stm32Wb5xEvent::HalInitialized)
+/// Potential firmware kinds for [`CoprocessorReady`](Stm32Wb5xEvent::CoprocessorReady)
 /// event.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ResetReason {
-    /// Firmware started properly
-    Normal,
-    /// Updater mode entered because of updater_start command
-    Updater,
-    /// Updater mode entered because of a bad BLUE flag
-    UpdaterBadFlag,
-    /// Updater mode entered with IRQ pin
-    UpdaterPin,
-    /// Reset caused by watchdog
-    Watchdog,
-    /// Reset due to lockup
-    Lockup,
-    /// Brownout reset
-    Brownout,
-    /// Reset caused by a crash (NMI or Hard Fault)
-    Crash,
-    /// Reset caused by an ECC error
-    EccError,
+pub enum FirmwareKind {
+    /// Wireless firmware (BLE, Thread, etc.)
+    Wireless,
+
+    /// RCC firmware.
+    Rcc,
 }
 
-impl TryFrom<u8> for ResetReason {
+impl TryFrom<u8> for FirmwareKind {
     type Error = Stm32Wb5xError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(ResetReason::Normal),
-            2 => Ok(ResetReason::Updater),
-            3 => Ok(ResetReason::UpdaterBadFlag),
-            4 => Ok(ResetReason::UpdaterPin),
-            5 => Ok(ResetReason::Watchdog),
-            6 => Ok(ResetReason::Lockup),
-            7 => Ok(ResetReason::Brownout),
-            8 => Ok(ResetReason::Crash),
-            9 => Ok(ResetReason::EccError),
-            _ => Err(Stm32Wb5xError::UnknownResetReason(value)),
+            0 => Ok(FirmwareKind::Wireless),
+            1 => Ok(FirmwareKind::Rcc),
+            _ => Err(Stm32Wb5xError::UnknownFirmwareKind(value)),
         }
     }
 }
 
-/// Convert a buffer to the `HalInitialized` `Stm32Wb5xEvent`.
+/// Convert a buffer to the `CoprocessorReady` `Stm32Wb5xEvent`.
 ///
 /// # Errors
 ///
 /// - Returns a `BadLength` HCI error if the buffer is not exactly 3 bytes long
-///
-/// - Returns a `UnknownResetReason` BlueNRG error if the reset reason is not recognized.
-fn to_hal_initialized(buffer: &[u8]) -> Result<ResetReason, hci::event::Error<Stm32Wb5xError>> {
+/// - Returns a `UnknownFirmwareKind` CPU2 error if the firmware kind is not recognized.
+fn to_coprocessor_ready(buffer: &[u8]) -> Result<FirmwareKind, hci::event::Error<Stm32Wb5xError>> {
     require_len!(buffer, 3);
 
-    Ok(buffer[2].try_into().map_err(hci::event::Error::Vendor)?)
-}
-
-#[cfg(feature = "ms")]
-bitflags! {
-    /// Bitfield for the [Events Lost](Stm32Wb5xEvent::EventsLost) event. Each bit indicates a
-    /// different type of event that was not handled.
-    #[derive(Default)]
-    pub struct EventFlags: u64 {
-        /// HCI Event: [Disconnection complete](hci::event::Event::DisconnectionComplete).
-        const DISCONNECTION_COMPLETE = 1 << 0;
-        /// HCI Event: [Encryption change](hci::event::Event::EncryptionChange).
-        const ENCRYPTION_CHANGE = 1 << 1;
-        /// HCI Event: [Read Remote Version
-        /// Complete](hci::event::Event::ReadRemoteVersionInformationComplete).
-        const READ_REMOTE_VERSION_COMPLETE = 1 << 2;
-        /// HCI Event: [Command Complete](hci::event::Event::CommandComplete).
-        const COMMAND_COMPLETE = 1 << 3;
-        /// HCI Event: [Command Status](hci::event::Event::CommandStatus).
-        const COMMAND_STATUS = 1 << 4;
-        /// HCI Event: [Hardware Error](hci::event::Event::HardwareError).
-        const HARDWARE_ERROR = 1 << 5;
-        /// HCI Event: [Number of completed packets](hci::event::Event::NumberOfCompletedPackets).
-        const NUMBER_OF_COMPLETED_PACKETS = 1 << 6;
-        /// HCI Event: [Encryption key refresh
-        /// complete](hci::event::Event::EncryptionKeyRefreshComplete).
-        const ENCRYPTION_KEY_REFRESH = 1 << 7;
-        /// BlueNRG-MS Event: [HAL Initialized](Stm32Wb5xEvent::HalInitialized).
-        const HAL_INITIALIZED = 1 << 8;
-        /// BlueNRG Event: [GAP Set Limited Discoverable
-        /// complete](Stm32Wb5xEvent::GapLimitedDiscoverableTimeout).
-        const GAP_LIMITED_DISCOVERABLE_TIMEOUT = 1 << 9;
-        /// BlueNRG Event: [GAP Pairing complete](Stm32Wb5xEvent::GapPairingComplete).
-        const GAP_PAIRING_COMPLETE = 1 << 10;
-        /// BlueNRG Event: [GAP Pass Key Request](Stm32Wb5xEvent::GapPassKeyRequest).
-        const GAP_PASS_KEY_REQUEST = 1 << 11;
-        /// BlueNRG Event: [GAP Authorization Request](Stm32Wb5xEvent::GapAuthorizationRequest).
-        const GAP_AUTHORIZATION_REQUEST = 1 << 12;
-        /// BlueNRG Event: [GAP Peripheral Security
-        /// Initiated](Stm32Wb5xEvent::GapPeripheralSecurityInitiated).
-        const GAP_PERIPHERAL_SECURITY_INITIATED = 1 << 13;
-        /// BlueNRG Event: [GAP Bond Lost](Stm32Wb5xEvent::GapBondLost).
-        const GAP_BOND_LOST = 1 << 14;
-        /// BlueNRG Event: [GAP Procedure complete](Stm32Wb5xEvent::GapProcedureComplete).
-        const GAP_PROCEDURE_COMPLETE = 1 << 15;
-        /// BlueNRG-MS Event: [GAP Address Not Resolved](Stm32Wb5xEvent::GapAddressNotResolved).
-        const GAP_ADDRESS_NOT_RESOLVED = 1 << 16;
-        /// BlueNRG Event: [L2Cap Connection Update
-        /// Response](Stm32Wb5xEvent::L2CapConnectionUpdateResponse).
-        const L2CAP_CONNECTION_UPDATE_RESPONSE = 1 << 17;
-        /// BlueNRG Event: [L2Cap Procedure Timeout](Stm32Wb5xEvent::L2CapProcedureTimeout).
-        const L2CAP_PROCEDURE_TIMEOUT = 1 << 18;
-        /// BlueNRG Event: [L2Cap Connection Update
-        /// Request](Stm32Wb5xEvent::L2CapConnectionUpdateRequest).
-        const L2CAP_CONNECTION_UPDATE_REQUEST = 1 << 19;
-        /// BlueNRG Event: [GATT Attribute modified](Stm32Wb5xEvent::GattAttributeModified).
-        const GATT_ATTRIBUTE_MODIFIED = 1 << 20;
-        /// BlueNRG Event: [GATT timeout](Stm32Wb5xEvent::GattProcedureTimeout).
-        const GATT_PROCEDURE_TIMEOUT = 1 << 21;
-        /// BlueNRG Event: [Exchange MTU Response](Stm32Wb5xEvent::AttExchangeMtuResponse).
-        const ATT_EXCHANGE_MTU_RESPONSE = 1 << 22;
-        /// BlueNRG Event: [Find information response](Stm32Wb5xEvent::AttFindInformationResponse).
-        const ATT_FIND_INFORMATION_RESPONSE = 1 << 23;
-        /// BlueNRG Event: [Find by type value response](Stm32Wb5xEvent::AttFindByTypeValueResponse).
-        const ATT_FIND_BY_TYPE_VALUE_RESPONSE = 1 << 24;
-        /// BlueNRG Event: [Find read by type response](Stm32Wb5xEvent::AttReadByTypeResponse).
-        const ATT_READ_BY_TYPE_RESPONSE = 1 << 25;
-        /// BlueNRG Event: [Read response](Stm32Wb5xEvent::AttReadResponse).
-        const ATT_READ_RESPONSE = 1 << 26;
-        /// BlueNRG Event: [Read blob response](Stm32Wb5xEvent::AttReadBlobResponse).
-        const ATT_READ_BLOB_RESPONSE = 1 << 27;
-        /// BlueNRG Event: [Read multiple response](Stm32Wb5xEvent::AttReadMultipleResponse).
-        const ATT_READ_MULTIPLE_RESPONSE = 1 << 28;
-        /// BlueNRG Event: [Read by group type response](Stm32Wb5xEvent::AttReadByGroupTypeResponse).
-        const ATT_READ_BY_GROUP_TYPE_RESPONSE = 1 << 29;
-        /// BlueNRG Event: ATT Write Response
-        const ATT_WRITE_RESPONSE = 1 << 30;
-        /// BlueNRG Event: [Prepare Write Response](Stm32Wb5xEvent::AttPrepareWriteResponse).
-        const ATT_PREPARE_WRITE_RESPONSE = 1 << 31;
-        /// BlueNRG Event: [Execute write response](Stm32Wb5xEvent::AttExecuteWriteResponse).
-        const ATT_EXECUTE_WRITE_RESPONSE = 1 << 32;
-        /// BlueNRG Event: [Indication received](Stm32Wb5xEvent::GattIndication) from server.
-        const GATT_INDICATION = 1 << 33;
-        /// BlueNRG Event: [Notification received](Stm32Wb5xEvent::GattNotification) from server.
-        const GATT_NOTIFICATION = 1 << 34;
-        /// BlueNRG Event: [GATT Procedure complete](Stm32Wb5xEvent::GattProcedureComplete).
-        const GATT_PROCEDURE_COMPLETE = 1 << 35;
-        /// BlueNRG Event: [Error response received from server](Stm32Wb5xEvent::AttErrorResponse).
-        const GATT_ERROR_RESPONSE = 1 << 36;
-        /// BlueNRG Event: [Response](Stm32Wb5xEvent::GattDiscoverOrReadCharacteristicByUuidResponse)
-        /// to either "Discover Characteristic by UUID" or "Read Characteristic by UUID" request
-        const GATT_DISCOVER_OR_READ_CHARACTERISTIC_BY_UUID_RESPONSE = 1 << 37;
-        /// BlueNRG Event: [Write request received](Stm32Wb5xEvent::AttWritePermitRequest) by server.
-        const GATT_WRITE_PERMIT_REQUEST = 1 << 38;
-        /// BlueNRG Event: [Read request received](Stm32Wb5xEvent::AttReadPermitRequest) by server.
-        const GATT_READ_PERMIT_REQUEST = 1 << 39;
-        /// BlueNRG Event: [Read multiple request
-        /// received](Stm32Wb5xEvent::AttReadMultiplePermitRequest) by server.
-        const GATT_READ_MULTIPLE_PERMIT_REQUEST = 1 << 40;
-        /// BlueNRG-MS Event: [TX Pool available](Stm32Wb5xEvent::GattTxPoolAvailable) event missed.
-        const GATT_TX_POOL_AVAILABLE = 1 << 41;
-        /// BlueNRG-MS Event: [Server confirmation](Stm32Wb5xEvent::GattServerConfirmation).
-        const GATT_SERVER_RX_CONFIRMATION = 1 << 42;
-        /// BlueNRG-MS Event: [Prepare write permit
-        /// request](Stm32Wb5xEvent::AttPrepareWritePermitRequest).
-        const GATT_PREPARE_WRITE_PERMIT_REQUEST = 1 << 43;
-        /// BlueNRG-MS Event: Link Layer [connection
-        /// complete](hci::event::Event::LeConnectionComplete).
-        const LINK_LAYER_CONNECTION_COMPLETE = 1 << 44;
-        /// BlueNRG-MS Event: Link Layer [advertising
-        /// report](hci::event::Event::LeAdvertisingReport).
-        const LINK_LAYER_ADVERTISING_REPORT = 1 << 45;
-        /// BlueNRG-MS Event: Link Layer [connection update
-        /// complete](hci::event::Event::LeConnectionUpdateComplete).
-        const LINK_LAYER_CONNECTION_UPDATE_COMPLETE = 1 << 46;
-        /// BlueNRG-MS Event: Link Layer [read remote used
-        /// features](hci::event::Event::LeReadRemoteUsedFeaturesComplete).
-        const LINK_LAYER_READ_REMOTE_USED_FEATURES = 1 << 47;
-        /// BlueNRG-MS Event: Link Layer [long-term key
-        /// request](hci::event::Event::LeLongTermKeyRequest).
-        const LINK_LAYER_LTK_REQUEST = 1 << 48;
-    }
+    Ok(buffer[0].try_into().map_err(hci::event::Error::Vendor)?)
 }
 
 macro_rules! require_l2cap_event_data_len {
