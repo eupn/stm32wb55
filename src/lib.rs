@@ -57,10 +57,10 @@ pub use command::l2cap;
 
 pub use hci::host::{AdvertisingFilterPolicy, AdvertisingType, OwnAddressType};
 
-use stm32wb_hal::tl_mbox;
 use stm32wb_hal::ipcc;
-use stm32wb_hal::tl_mbox::{consts::TlPacketType, shci::ShciBleInitCmdParam};
+use stm32wb_hal::tl_mbox;
 use stm32wb_hal::tl_mbox::cmd::CmdSerial;
+use stm32wb_hal::tl_mbox::{consts::TlPacketType, shci::ShciBleInitCmdParam};
 
 const TX_BUF_SIZE: usize = core::mem::size_of::<CmdSerial>();
 
@@ -76,7 +76,12 @@ pub struct RadioCoprocessor<'buf> {
 
 impl<'buf> RadioCoprocessor<'buf> {
     /// Creates a new RadioCoprocessor instance to send commands to and receive events from.
-    pub fn new(buf: &mut [u8], mbox: tl_mbox::TlMbox, ipcc: ipcc::Ipcc, config: ShciBleInitCmdParam) -> RadioCoprocessor {
+    pub fn new(
+        buf: &mut [u8],
+        mbox: tl_mbox::TlMbox,
+        ipcc: ipcc::Ipcc,
+        config: ShciBleInitCmdParam,
+    ) -> RadioCoprocessor {
         RadioCoprocessor {
             mbox,
             ipcc,
@@ -112,7 +117,9 @@ impl<'buf> RadioCoprocessor<'buf> {
         while let Some(evt) = self.mbox.dequeue_event() {
             let event = evt.evt();
 
-            let buf = self.evt_buf.next_mut_slice(evt.size().expect("Known packet kind"));
+            let buf = self
+                .evt_buf
+                .next_mut_slice(evt.size().expect("Known packet kind"));
             evt.write(buf).expect("EVT_BUF_SIZE is too small");
 
             if event.kind() == 18 {
@@ -124,10 +131,10 @@ impl<'buf> RadioCoprocessor<'buf> {
 
         // Ignore SYS-channel "command complete" events
         if self.mbox.pop_last_cc_evt().is_some() {
-            return false
+            return false;
         }
 
-        return true
+        return true;
     }
 }
 
@@ -156,10 +163,7 @@ impl<'buf> hci::Controller for RadioCoprocessor<'buf> {
             }
 
             _ => {
-                tl_mbox::ble::ble_send_cmd(
-                    &mut self.ipcc,
-                    &self.tx_buf[..],
-                );
+                tl_mbox::ble::ble_send_cmd(&mut self.ipcc, &self.tx_buf[..]);
             }
         }
 
@@ -177,7 +181,7 @@ impl<'buf> hci::Controller for RadioCoprocessor<'buf> {
 
     fn peek(&mut self, n: usize) -> nb::Result<u8, Self::Error> {
         if n >= self.evt_buf.size() {
-            return Err(nb::Error::WouldBlock)
+            return Err(nb::Error::WouldBlock);
         } else {
             Ok(self.evt_buf.peek(n))
         }
@@ -206,7 +210,11 @@ impl<T, E> UartController<E> for T where
         + crate::gatt::Commands<Error = E>
         + crate::hal::Commands<Error = E>
         + crate::l2cap::Commands<Error = E>
-        + bluetooth_hci::host::uart::Hci<E, crate::event::Stm32Wb5xEvent, crate::event::Stm32Wb5xError>
+        + bluetooth_hci::host::uart::Hci<
+            E,
+            crate::event::Stm32Wb5xEvent,
+            crate::event::Stm32Wb5xError,
+        >
 {
 }
 
@@ -241,4 +249,3 @@ impl<VS> LocalVersionInfoExt for hci::event::command::LocalVersionInfo<VS> {
         }
     }
 }
-

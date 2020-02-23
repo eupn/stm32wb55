@@ -569,7 +569,9 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
 
         match event_code {
             // SHCI "C2 Ready" event
-            0x9200 => Ok(Stm32Wb5xEvent::CoprocessorReady(to_coprocessor_ready(buffer)?)),
+            0x9200 => Ok(Stm32Wb5xEvent::CoprocessorReady(to_coprocessor_ready(
+                buffer,
+            )?)),
 
             0x0400 => Ok(Stm32Wb5xEvent::GapLimitedDiscoverableTimeout),
             0x0401 => Ok(Stm32Wb5xEvent::GapPairingComplete(to_gap_pairing_complete(
@@ -588,7 +590,9 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
             0x0408 => {
                 #[cfg(feature = "ms")]
                 {
-                    Ok(Stm32Wb5xEvent::GapAddressNotResolved(to_conn_handle(buffer)?))
+                    Ok(Stm32Wb5xEvent::GapAddressNotResolved(to_conn_handle(
+                        buffer,
+                    )?))
                 }
 
                 #[cfg(not(feature = "ms"))]
@@ -610,7 +614,9 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
             0x0C01 => Ok(Stm32Wb5xEvent::GattAttributeModified(
                 to_gatt_attribute_modified(buffer)?,
             )),
-            0x0C02 => Ok(Stm32Wb5xEvent::GattProcedureTimeout(to_conn_handle(buffer)?)),
+            0x0C02 => Ok(Stm32Wb5xEvent::GattProcedureTimeout(to_conn_handle(
+                buffer,
+            )?)),
             0x0C03 => Ok(Stm32Wb5xEvent::AttExchangeMtuResponse(
                 to_att_exchange_mtu_resp(buffer)?,
             )),
@@ -623,13 +629,15 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
             0x0C06 => Ok(Stm32Wb5xEvent::AttReadByTypeResponse(
                 to_att_read_by_type_response(buffer)?,
             )),
-            0x0C07 => Ok(Stm32Wb5xEvent::AttReadResponse(to_att_read_response(buffer)?)),
+            0x0C07 => Ok(Stm32Wb5xEvent::AttReadResponse(to_att_read_response(
+                buffer,
+            )?)),
             0x0C08 => Ok(Stm32Wb5xEvent::AttReadBlobResponse(to_att_read_response(
                 buffer,
             )?)),
-            0x0C09 => Ok(Stm32Wb5xEvent::AttReadMultipleResponse(to_att_read_response(
-                buffer,
-            )?)),
+            0x0C09 => Ok(Stm32Wb5xEvent::AttReadMultipleResponse(
+                to_att_read_response(buffer)?,
+            )),
             0x0C0A => Ok(Stm32Wb5xEvent::AttReadByGroupTypeResponse(
                 to_att_read_by_group_type_response(buffer)?,
             )),
@@ -640,7 +648,9 @@ impl hci::event::VendorEvent for Stm32Wb5xEvent {
                 buffer,
             )?)),
             0x0C0E => Ok(Stm32Wb5xEvent::GattIndication(to_attribute_value(buffer)?)),
-            0x0C0F => Ok(Stm32Wb5xEvent::GattNotification(to_attribute_value(buffer)?)),
+            0x0C0F => Ok(Stm32Wb5xEvent::GattNotification(to_attribute_value(
+                buffer,
+            )?)),
             0x0C10 => Ok(Stm32Wb5xEvent::GattProcedureComplete(
                 to_gatt_procedure_complete(buffer)?,
             )),
@@ -752,9 +762,9 @@ macro_rules! require_l2cap_event_data_len {
     ($left:expr, $right:expr) => {
         let actual = $left[4];
         if actual != $right {
-            return Err(hci::event::Error::Vendor(Stm32Wb5xError::BadL2CapDataLength(
-                actual, $right,
-            )));
+            return Err(hci::event::Error::Vendor(
+                Stm32Wb5xError::BadL2CapDataLength(actual, $right),
+            ));
         }
     };
 }
@@ -1780,7 +1790,9 @@ impl AttReadResponse {
     }
 }
 
-fn to_att_read_response(buffer: &[u8]) -> Result<AttReadResponse, hci::event::Error<Stm32Wb5xError>> {
+fn to_att_read_response(
+    buffer: &[u8],
+) -> Result<AttReadResponse, hci::event::Error<Stm32Wb5xError>> {
     require_len_at_least!(buffer, 5);
 
     let data_len = buffer[4] as usize;
