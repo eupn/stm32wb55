@@ -1,0 +1,10 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = "arm-none-eabi-gdb -q"
+
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+   "-C", "linker=arm-none-eabi-ld",
+]
+
+[build]
+target = "thumbv7em-none-eabihf" # Cortex-M4F and Cortex-M7F (with FPU)
