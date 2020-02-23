@@ -155,6 +155,10 @@ const APP: () = {
         loop {
             cortex_m::asm::wfi();
 
+            // At this point, an interrupt was received.
+            // Radio co-processor talks to the app via IPCC interrupts, so this interrupt
+            // may be one of the IPCC interrupts and the app can start processing events from
+            // radio co-processor here.
             let evt = cx.resources.rc.lock(|rc| {
                 if rc.process_events() {
                     Some(block!(rc.read()))
@@ -163,9 +167,9 @@ const APP: () = {
                 }
             });
 
-            // Setup BLE service when BLE coprocessor is ready
             if let Some(Ok(Packet::Event(evt))) = evt {
                 if let Event::Vendor(stm32wb55::event::Stm32Wb5xEvent::CoprocessorReady(_)) = evt {
+                    // Setup BLE service when BLE co-processor is ready
                     cx.spawn.setup().unwrap();
                 } else {
                     cx.spawn.event(evt).unwrap();
@@ -175,6 +179,7 @@ const APP: () = {
         }
     }
 
+    /// Sets up Eddystone BLE beacon service.
     #[task(resources = [rc, hci_commands_queue], spawn = [exec_hci])]
     fn setup(mut cx: setup::Context) {
         cx.resources
@@ -189,6 +194,7 @@ const APP: () = {
         cx.spawn.exec_hci().unwrap();
     }
 
+    /// Executes HCI command from the queue.
     #[task(resources = [rc, hci_commands_queue, ble_context])]
     fn exec_hci(mut cx: exec_hci::Context) {
         if let Some(cmd) = cx.resources.hci_commands_queue.dequeue() {
@@ -198,6 +204,7 @@ const APP: () = {
         }
     }
 
+    /// Processes BLE events.
     #[task(resources = [ble_context])]
     fn event(mut cx: event::Context, event: Event<stm32wb55::event::Stm32Wb5xEvent>) {
         if let Event::CommandComplete(CommandComplete { return_params, .. }) = event {
@@ -222,17 +229,20 @@ const APP: () = {
         }
     }
 
+    /// Handles IPCC interrupt and notifies `RadioCoprocessor` code about it.
     #[task(binds = IPCC_C1_RX_IT, resources = [rc])]
     fn mbox_rx(cx: mbox_rx::Context) {
         cx.resources.rc.handle_ipcc_rx();
     }
 
+    /// Handles IPCC interrupt and notifies `RadioCoprocessor` code about it.
     #[task(binds = IPCC_C1_TX_IT, resources = [rc])]
     fn mbox_tx(cx: mbox_tx::Context) {
         cx.resources.rc.handle_ipcc_tx();
     }
 
-    // Interrupt handlers used to dispatch software tasks
+    // Interrupt handlers used to dispatch software tasks.
+    // One per priority.
     extern "C" {
         fn USART1();
     }
