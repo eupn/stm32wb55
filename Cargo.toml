@@ -11,18 +11,18 @@ repository = "https://github.com/eupn/stm32wb55"
 readme = "README.md"
 
 [features]
-# This library is used on a STM32WB5x application controller (Cortex-M4)
-# The library will take over IPCC and mailbox peripherals
+# This library is used on a STM32WB5x application controller (Cortex-M4F).
+# The library will take over IPCC and mailbox peripherals for low-level communication.
 default = ["stm32wb-hal/rt"]
 
 [dependencies]
 nb = "0.1.1"
 bluetooth-hci = { git = "https://github.com/danielgallagher0/bluetooth-hci" }
 bitflags = "1.0"
+#cortex-m-semihosting = { version = "0.3.5", features = ["jlink-quirks"] }
 
 [dependencies.stm32wb-hal]
-path = "../stm32wb-hal"
-optional = true
+git = "https://github.com/eupn/stm32wb-hal.git"
 
 [dependencies.embedded-hal]
 version = "0.2.3"
