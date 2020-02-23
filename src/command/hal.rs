@@ -194,8 +194,10 @@ impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
     }
 
     fn set_tx_power_level(&mut self, level: PowerLevel) -> nb::Result<(), Self::Error> {
+        // Byte 0: enable high power mode - deprecated and ignored on STM32WB
+        // Byte 1: PA level
         let mut bytes = [0; 2];
-        LittleEndian::write_u16(&mut bytes, level as u16);
+        bytes[1] = level as u8;
 
         self.write_command(crate::opcode::HAL_SET_TX_POWER_LEVEL, &bytes)
     }
@@ -579,41 +581,102 @@ pub enum ConfigParameter {
 
 /// Transmitter power levels available for the system.
 ///
-/// The controller uses two parameters to determine the actual power level: enable high power, and
-/// PA level. This enum combines the two parameters. The high byte is the PA level; the low byte is
-/// the enable high power flag.
-#[repr(u16)]
+/// STM32WB5x uses single byte parameter for PA level.
+#[repr(u8)]
 pub enum PowerLevel {
-    /// PA level 0, low power.
-    DbmNeg18 = 0x000,
-    /// PA level 0, high power.
-    DbmNeg15 = 0x001,
-    /// PA level 1, low power.
-    DbmNeg14_7 = 0x100,
-    /// PA level 1, high power.
-    DbmNeg11_7 = 0x101,
-    /// PA level 2, low power.
-    DbmNeg11_4 = 0x200,
-    /// PA level 2, high power.
-    DbmNeg8_4 = 0x201,
-    /// PA level 3, low power.
-    DbmNeg8_1 = 0x300,
-    /// PA level 3, high power.
-    DbmNeg5_1 = 0x301,
-    /// PA level 4, low power.
-    DbmNeg4_9 = 0x400,
-    /// PA level 4, high power.
-    DbmNeg2_1 = 0x401,
-    /// PA level 5, low power.
-    DbmNeg1_6 = 0x500,
-    /// PA level 5, high power.
-    Dbm1_4 = 0x501,
-    /// PA level 6, low power.
-    Dbm1_7 = 0x600,
-    /// PA level 6, high power.
-    Dbm4_7 = 0x601,
-    /// PA level 7, low power.
-    Dbm5_0 = 0x700,
-    /// PA level 7, high power.
-    Dbm8_0 = 0x701,
+    /// -40 dBm.
+    Minus40dBm = 0x00,
+
+    /// -20.85 dBm.
+    Minus20_85dBm = 0x01,
+
+    /// -19.75 dBm.
+    Minus19_75dBm = 0x02,
+
+    /// -18.85 dBm.
+    Minus18_85dBm = 0x03,
+
+    /// 17.6 dBm.
+    Minus17_6dBm = 0x04,
+
+    /// -16.5 dBm.
+    Minus16_5dBm = 0x05,
+
+    /// -15.25 dBm.
+    Minus15_25dBm = 0x06,
+
+    /// -14.1 dBm.
+    Minus14_1dBm = 0x07,
+
+    /// -13.15 dBm.
+    Minus13_15dBm = 0x08,
+
+    /// -12.05 dBm.
+    Minus12_05dBm = 0x09,
+
+    /// -10.9 dBm.
+    Minus10_9dBm = 0x0A,
+
+    /// -9.9 dBm.
+    Minus9_9dBm = 0x0B,
+
+    /// -8.85 dBm.
+    Minus8_85dBm = 0x0C,
+
+    /// -7.8 dBm.
+    Minus7_8dBm = 0x0D,
+
+    /// -6.9 dBm.
+    Minus6_9dBm = 0x0E,
+
+    /// -5.9 dBm.
+    Minus5_9dBm = 0x0F,
+
+    /// -4.95 dBm.
+    Minus4_95dBm = 0x10,
+
+    /// -4 dBm.
+    Minus4dBm = 0x11,
+
+    /// -3.15 dBm.
+    Minus3_15dBm = 0x12,
+
+    /// -2.45 dBm.
+    Minus2_45dBm = 0x13,
+
+    /// -1.8 dBm.
+    Minus1_8dBm = 0x14,
+
+    /// -1.3 dBm.
+    Minus1_3dBm = 0x15,
+
+    /// -0.85 dBm.
+    Minus0_85dBm = 0x16,
+
+    /// -0.5 dBm.
+    Minus0_5dBm = 0x17,
+
+    /// -0.15 dBm.
+    Minus0_15dBm = 0x18,
+
+    /// 0 dBm.
+    ZerodBm = 0x19,
+
+    /// 1 dBm.
+    Plus1dBm = 0x1A,
+
+    /// 2 dBm.
+    Plus2dBm = 0x1B,
+
+    /// 3 dBm.
+    Plus3dBm = 0x1C,
+
+    /// 4 dBm.
+    Plus4dBm = 0x1D,
+
+    /// 5 dBm.
+    Plus5dBm = 0x1E,
+
+    /// 6 dBm.
+    Plus6dBm = 0x1F,
 }
