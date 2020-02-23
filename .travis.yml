@@ -3,6 +3,4 @@ rust:
   - stable
 install: rustup target add thumbv7em-none-eabihf
 script:
-  - cargo build --verbose --all --target=thumbv7em-none-eabihf
-  - cargo test --verbose --all
-  - cargo test --verbose --all --no-default-features
+  - cargo build --release --all --target=thumbv7em-none-eabihf
