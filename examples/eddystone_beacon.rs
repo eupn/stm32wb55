@@ -378,18 +378,17 @@ fn init_eddystone(hci_commands_queue: &mut HciCommandsQueue) {
         })
         .ok();
 
-    // Remove the TX power level advertisement (this is done to decrease the packet size)
+    // Remove some advertisements (this is done to decrease the packet size)
     hci_commands_queue
         .enqueue(|rc, _| {
             rc.delete_ad_type(AdvertisingDataType::TxPowerLevel)
                 .expect("delete tx power ad type")
         })
         .ok();
-
     hci_commands_queue
         .enqueue(|rc, _| {
             rc.delete_ad_type(AdvertisingDataType::PeripheralConnectionInterval)
-                .expect("delete tx power ad type")
+                .expect("delete conn interval ad type")
         })
         .ok();
 
