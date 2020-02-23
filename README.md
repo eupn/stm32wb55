@@ -14,7 +14,7 @@ family of wireless SoC. It extends [bluetooth-hci] with vendor-specific commands
 
 ## Examples
 
-* [transparent_mode.rs] - a firmware for STM32WB55 MCU that can be uploaded to USB dongle and used with [STM32CubeMonitor-RF] software.
+* [transparent_mode.rs] - a firmware for STM32WB55 MCU that can be uploaded to USB dongle and used with [STM32CubeMon-RF] software.
 * [eddystone_beacon.rs] - an implementation of [Eddystone URL beacon] that broadcasts
 [https://www.rust-lang.com](https://www.rust-lang.com) URL.
 
@@ -33,3 +33,4 @@ and fixing them.
 [BlueNRG]: https://github.com/danielgallagher0/bluenrg
 [bluetooth-hci]: https://github.com/danielgallagher0/bluetooth-hci
 [Eddystone beacon]: https://developers.google.com/beacons/eddystone
+[STM32CubeMon-RF]: https://www.st.com/en/development-tools/stm32cubemonrf.html
