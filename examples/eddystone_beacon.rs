@@ -6,39 +6,45 @@
 extern crate panic_semihosting;
 extern crate stm32wb_hal as hal;
 
-use cortex_m_rt::exception;
+use core::time::Duration;
 
+use cortex_m_rt::exception;
+use heapless::spsc::{MultiCore, Queue};
 use nb::block;
 use rtfm::app;
 
-use hal::flash::FlashExt;
-use hal::prelude::*;
-use hal::rcc::{
-    ApbDivider, Config, HDivider, HseDivider, PllConfig, PllSrc, RfWakeupClock, RtcClkSrc,
-    StopWakeupClock, SysClkSrc,
+use hal::{
+    flash::FlashExt,
+    prelude::*,
+    rcc::{
+        ApbDivider, Config, HDivider, HseDivider, PllConfig, PllSrc, RfWakeupClock, RtcClkSrc,
+        StopWakeupClock, SysClkSrc,
+    },
+    tl_mbox::{lhci::LhciC1DeviceInformationCcrp, shci::ShciBleInitCmdParam, TlMbox},
 };
 
-use hal::tl_mbox::shci::ShciBleInitCmdParam;
-use hal::tl_mbox::TlMbox;
-
-use bluetooth_hci::host::uart::{Hci as UartHci, Packet};
-use bluetooth_hci::host::{AdvertisingFilterPolicy, EncryptionKey, Hci, OwnAddressType};
-use stm32wb55::hal::{Commands as HalCommands, ConfigData, PowerLevel};
-use stm32wb55::RadioCoprocessor;
-
-use bluetooth_hci::event::Event;
-
-use bluetooth_hci::event::command::{CommandComplete, ReturnParameters};
-use bluetooth_hci::BdAddr;
-use core::time::Duration;
-use hal::tl_mbox::lhci::LhciC1DeviceInformationCcrp;
-use heapless::spsc::{MultiCore, Queue};
-use stm32wb55::gap::{
-    AdvertisingDataType, AdvertisingType, Commands as GapCommands, DiscoverableParameters, Role,
+use bluetooth_hci::{
+    event::{
+        command::{CommandComplete, ReturnParameters},
+        Event,
+    },
+    host::{
+        uart::{Hci as UartHci, Packet},
+        AdvertisingFilterPolicy, EncryptionKey, Hci, OwnAddressType,
+    },
+    BdAddr,
 };
-use stm32wb55::gatt::{
-    CharacteristicHandle, Commands as GattCommads, ServiceHandle,
-    UpdateCharacteristicValueParameters,
+
+use stm32wb55::{
+    gap::{
+        AdvertisingDataType, AdvertisingType, Commands as GapCommands, DiscoverableParameters, Role,
+    },
+    gatt::{
+        CharacteristicHandle, Commands as GattCommads, ServiceHandle,
+        UpdateCharacteristicValueParameters,
+    },
+    hal::{Commands as HalCommands, ConfigData, PowerLevel},
+    RadioCoprocessor,
 };
 
 pub type HciCommandsQueue =
@@ -49,7 +55,10 @@ pub type HciCommandsQueue =
 const EDDYSTONE_URL_PREFIX: EddystoneUrlScheme = EddystoneUrlScheme::Https;
 const EDDYSTONE_URL: &[u8] = b"www.rust-lang.com";
 
+/// Advertisement interval in milliseconds.
 const ADV_INTERVAL_MS: u64 = 250;
+
+/// TX power at 0 m range. Used for range approximation.
 const CALIBRATED_TX_POWER_AT_0_M: u8 = -22_i8 as u8;
 
 // Need to be at least 257 bytes to hold biggest possible HCI BLE event + header
