@@ -232,31 +232,6 @@ pub trait Commands {
         authorization: Authorization,
     ) -> nb::Result<(), Self::Error>;
 
-    #[cfg(not(feature = "ms"))]
-    /// Register the GAP service with the GATT.
-    ///
-    /// The device name characteristic and appearance characteristic are added by default and the
-    /// handles of these characteristics are returned in the [event
-    /// data](::event::command::GapInit).
-    ///
-    /// # Errors
-    ///
-    /// Only underlying communication errors are reported.
-    ///
-    /// # Generated events
-    ///
-    /// A [Command Complete](::event::command::ReturnParameters::GapInit) event is generated.
-    fn init(&mut self, role: Role) -> nb::Result<(), Self::Error>;
-
-    #[cfg(not(feature = "ms"))]
-    /// Register the GAP service with the GATT.
-    ///
-    /// This function exists to prevent name conflicts with other Commands traits' init methods.
-    fn init_gap(&mut self, role: Role) -> nb::Result<(), Self::Error> {
-        self.init(role)
-    }
-
-    #[cfg(feature = "ms")]
     /// Register the GAP service with the GATT.
     ///
     /// The device name characteristic and appearance characteristic are added by default and the
@@ -277,7 +252,6 @@ pub trait Commands {
         dev_name_characteristic_len: u8,
     ) -> nb::Result<(), Self::Error>;
 
-    #[cfg(feature = "ms")]
     /// Register the GAP service with the GATT.
     ///
     /// This function exists to prevent name conflicts with other Commands traits' init methods.
@@ -290,28 +264,6 @@ pub trait Commands {
         self.init(role, privacy_enabled, dev_name_characteristic_len)
     }
 
-    #[cfg(not(feature = "ms"))]
-    /// Put the device into non-connectable mode.
-    ///
-    /// This mode does not support connection.
-    ///
-    /// # Errors
-    ///
-    /// - [BadAdvertisingType](Error::BadAdvertisingType) if the advertising type is not one
-    ///   of the supported modes. It must be
-    ///   [ScannableUndirected](AdvertisingType::ScannableUndirected) or
-    ///   (NonConnectableUndirected)[AdvertisingType::NonConnectableUndirected).
-    /// - Underlying communication errors.
-    ///
-    /// # Generated events
-    ///
-    /// A [Command Complete](::event::command::ReturnParameters::GapInit) event is generated.
-    fn set_nonconnectable(
-        &mut self,
-        advertising_type: AdvertisingType,
-    ) -> nb::Result<(), Error<Self::Error>>;
-
-    #[cfg(feature = "ms")]
     /// Put the device into non-connectable mode.
     ///
     /// This mode does not support connection. The privacy setting done in the
@@ -929,12 +881,6 @@ impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
         self.write_command(crate::opcode::GAP_AUTHORIZATION_RESPONSE, &bytes)
     }
 
-    #[cfg(not(feature = "ms"))]
-    fn init(&mut self, role: Role) -> nb::Result<(), Self::Error> {
-        self.write_command(crate::opcode::GAP_INIT, &[role.bits()])
-    }
-
-    #[cfg(feature = "ms")]
     fn init(
         &mut self,
         role: Role,
@@ -949,28 +895,6 @@ impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
         self.write_command(crate::opcode::GAP_INIT, &bytes)
     }
 
-    #[cfg(not(feature = "ms"))]
-    fn set_nonconnectable(
-        &mut self,
-        advertising_type: AdvertisingType,
-    ) -> nb::Result<(), Error<Self::Error>> {
-        match advertising_type {
-            AdvertisingType::ScannableUndirected | AdvertisingType::NonConnectableUndirected => (),
-            _ => {
-                return Err(nb::Error::Other(Error::BadAdvertisingType(
-                    advertising_type,
-                )));
-            }
-        }
-
-        self.write_command(
-            crate::opcode::GAP_SET_NONCONNECTABLE,
-            &[advertising_type as u8],
-        )
-        .map_err(rewrap_error)
-    }
-
-    #[cfg(feature = "ms")]
     fn set_nonconnectable(
         &mut self,
         advertising_type: AdvertisingType,
@@ -1351,7 +1275,7 @@ impl<'a, 'b> DiscoverableParameters<'a, 'b> {
     }
 
     fn copy_into_slice(&self, bytes: &mut [u8]) -> usize {
-        const NO_SPECIFIC_CONN_INTERVAL: u16 = 0xFFFF;
+        const NO_SPECIFIC_CONN_INTERVAL: u16 = 0x0000;
 
         let len = self.required_len();
         assert!(len <= bytes.len());
