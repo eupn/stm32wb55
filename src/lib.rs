@@ -40,13 +40,8 @@ extern crate bitflags;
 extern crate bluetooth_hci as hci;
 extern crate byteorder;
 extern crate embedded_hal as emhal;
-#[macro_use(block)]
-extern crate nb;
 
-use byteorder::{ByteOrder, LittleEndian};
-use core::cmp::min;
 use core::convert::TryFrom;
-use core::marker::PhantomData;
 use hci::host::HciHeader;
 use hci::Controller;
 
@@ -65,9 +60,8 @@ pub use hci::host::{AdvertisingFilterPolicy, AdvertisingType, OwnAddressType};
 use stm32wb_hal::tl_mbox;
 use stm32wb_hal::ipcc;
 use stm32wb_hal::tl_mbox::{consts::TlPacketType, shci::ShciBleInitCmdParam};
-use hci::event::VendorEvent;
-use crate::event::{Stm32Wb5xEvent, Stm32Wb5xError};
-use stm32wb_hal::tl_mbox::cmd::{CmdPacket, CmdSerial};
+use stm32wb_hal::tl_mbox::cmd::CmdSerial;
+use stm32wb_hal::tl_mbox::evt::{EvtSerial, CcEvt};
 
 const TX_BUF_SIZE: usize = core::mem::size_of::<CmdSerial>();
 
@@ -112,9 +106,11 @@ impl<'buf> RadioCoprocessor<'buf> {
         self.mbox.interrupt_ipcc_tx_handler(&mut self.ipcc);
     }
 
-    /// Call this function out of interrupt context, for example in `main()` loop.
-    pub fn process_event(&mut self) {
-        if let Some(evt) = self.mbox.dequeue_event() {
+    /// Call this function outside of interrupt context, for example in `main()` loop.
+    /// Returns `true` if events was written and can be read with HCI `read()` function.
+    /// Returns `false` if no HCI events was written.
+    pub fn process_events(&mut self) -> bool {
+        while let Some(evt) = self.mbox.dequeue_event() {
             let event = evt.evt();
 
             let buf = self.evt_buf.next_mut_slice(evt.size().expect("Known packet kind"));
@@ -126,6 +122,13 @@ impl<'buf> RadioCoprocessor<'buf> {
                 buf[0] = 0x04; // Replace event code with one that is supported by HCI
             }
         }
+
+        // Ignore SYS-channel "command complete" events
+        if let Some(cc_evt) = self.mbox.pop_last_cc_evt() {
+            return false
+        }
+
+        return true
     }
 }
 
