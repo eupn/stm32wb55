@@ -61,7 +61,6 @@ use stm32wb_hal::tl_mbox;
 use stm32wb_hal::ipcc;
 use stm32wb_hal::tl_mbox::{consts::TlPacketType, shci::ShciBleInitCmdParam};
 use stm32wb_hal::tl_mbox::cmd::CmdSerial;
-use stm32wb_hal::tl_mbox::evt::{EvtSerial, CcEvt};
 
 const TX_BUF_SIZE: usize = core::mem::size_of::<CmdSerial>();
 
@@ -124,7 +123,7 @@ impl<'buf> RadioCoprocessor<'buf> {
         }
 
         // Ignore SYS-channel "command complete" events
-        if let Some(cc_evt) = self.mbox.pop_last_cc_evt() {
+        if self.mbox.pop_last_cc_evt().is_some() {
             return false
         }
 
