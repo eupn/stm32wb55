@@ -3,7 +3,7 @@
 #![no_std]
 #![allow(non_snake_case)]
 
-extern crate panic_semihosting;
+extern crate panic_reset;
 extern crate stm32wb_hal as hal;
 
 use core::time::Duration;
@@ -199,8 +199,6 @@ const APP: () = {
     fn exec_hci(mut cx: exec_hci::Context) {
         if let Some(cmd) = cx.resources.hci_commands_queue.dequeue() {
             cmd(&mut cx.resources.rc, &cx.resources.ble_context);
-        } else {
-            cortex_m_semihosting::hprintln!("HCI commands queue is empty").unwrap();
         }
     }
 
@@ -222,10 +220,8 @@ const APP: () = {
                     cx.resources.ble_context.appearence_handle = Some(appearance_handle);
                 }
 
-                _ => (), //cortex_m_semihosting::hprintln!("Unhandled return params: {:?}", return_params).unwrap()
+                _ => (),
             }
-        } else {
-            cortex_m_semihosting::hprintln!("Unhandled event: {:?}", event).unwrap()
         }
     }
 
@@ -378,6 +374,7 @@ fn init_eddystone(hci_commands_queue: &mut HciCommandsQueue) {
                 )),
                 address_type: OwnAddressType::Public,
                 filter_policy: AdvertisingFilterPolicy::AllowConnectionAndScan,
+                // Local name should be empty for the device to be recognized as an Eddystone beacon
                 local_name: None,
                 advertising_data: &[],
                 conn_interval: (None, None),
