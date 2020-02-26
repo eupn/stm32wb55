@@ -10,7 +10,7 @@ reference implementation of [bluetooth-hci].
 It's using an [`embedded-hal` implementation] for low-level interaction.
 
 This crate provides the vendor-specific Bluetooth HCI for STMicro's [STM32WB5x]
-family of wireless SoC. It extends [bluetooth-hci] with vendor-specific commands and events (and associated errors).
+family of wireless SoC. It extends [bluetooth-hci] with vendor-specific commands and events and associated error types.
 
 ## Examples
 
@@ -34,6 +34,6 @@ and fixing them.
 [STM32WB5x]: https://www.st.com/en/microcontrollers-microprocessors/stm32wbx5.html
 [BlueNRG]: https://github.com/danielgallagher0/bluenrg
 [bluetooth-hci]: https://github.com/danielgallagher0/bluetooth-hci
-[Eddystone beacon]: https://developers.google.com/beacons/eddystone
+[Eddystone URL beacon]: https://developers.google.com/beacons/eddystone
 [Apple iBeacon]: https://developer.apple.com/ibeacon/
 [STM32CubeMon-RF]: https://www.st.com/en/development-tools/stm32cubemonrf.html
