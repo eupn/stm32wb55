@@ -11,7 +11,7 @@ repository = "https://github.com/eupn/stm32wb55"
 readme = "README.md"
 
 [dependencies]
-stm32wb-hal = { version = "0.1.0", features = ["rt", "stm32-usbd"] }
+stm32wb-hal = { version = "0.1.1" }
 nb = "0.1.1"
 bluetooth-hci = { git = "https://github.com/danielgallagher0/bluetooth-hci" }
 bitflags = "1.0"
