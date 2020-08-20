@@ -1231,26 +1231,22 @@ const MAX_ATTRIBUTE_LEN: usize = 248;
 impl Debug for GattAttributeModified {
     #[cfg(feature = "ms")]
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(
-            f,
-            "{{conn_handle: {:?}, attr_handle: {:?}, offset: {}, continued: {}, data: {:?}}}",
-            self.conn_handle,
-            self.attr_handle,
-            self.offset,
-            self.continued,
-            first_16(self.data()),
-        )
+        f.debug_struct("GattAttributeModified")
+            .field("conn_handle", &self.conn_handle)
+            .field("attr_handle", &self.attr_handle)
+            .field("offset", &self.offset)
+            .field("continued", &self.continued)
+            .field("data", &first_16(self.data()))
+            .finish()
     }
 
     #[cfg(not(feature = "ms"))]
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(
-            f,
-            "{{conn_handle: {:?}, attr_handle: {:?}, data: {:?}}}",
-            self.conn_handle,
-            self.attr_handle,
-            first_16(self.data()),
-        )
+        f.debug_struct("GattAttributeModified")
+            .field("conn_handle", &self.conn_handle)
+            .field("attr_handle", &self.attr_handle)
+            .field("data", &first_16(self.data()))
+            .finish()
     }
 }
 
