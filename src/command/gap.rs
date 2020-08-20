@@ -5,6 +5,7 @@ extern crate byteorder;
 extern crate embedded_hal as hal;
 extern crate nb;
 
+use bbqueue::ArrayLength;
 use byteorder::{ByteOrder, LittleEndian};
 use core::time::Duration;
 pub use hci::host::{AdvertisingFilterPolicy, AdvertisingType, OwnAddressType};
@@ -805,7 +806,7 @@ pub trait Commands {
     fn is_device_bonded(&mut self, addr: hci::host::PeerAddrType) -> nb::Result<(), Self::Error>;
 }
 
-impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
+impl<'buf, N: ArrayLength<u8>> Commands for crate::RadioCoprocessor<'buf, N> {
     type Error = ();
 
     fn set_nondiscoverable(&mut self) -> nb::Result<(), Self::Error> {

@@ -5,6 +5,7 @@ extern crate byteorder;
 extern crate embedded_hal as hal;
 extern crate nb;
 
+use bbqueue::ArrayLength;
 use byteorder::{ByteOrder, LittleEndian};
 use hci::types::{ConnectionInterval, ExpectedConnectionLength};
 
@@ -51,7 +52,7 @@ pub trait Commands {
     ) -> nb::Result<(), Self::Error>;
 }
 
-impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
+impl<'buf, N: ArrayLength<u8>> Commands for crate::RadioCoprocessor<'buf, N> {
     type Error = ();
 
     impl_params!(
