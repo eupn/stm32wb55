@@ -2419,6 +2419,7 @@ fn to_att_error_response(
 /// send the response to the client.
 ///
 /// See the Bluetooth Core v4.1 spec, Vol 3, Part F, section 3.4.4.
+/// See STM AN5270, section 3.4.19
 #[derive(Copy, Clone, Debug)]
 pub struct AttReadPermitRequest {
     /// Handle of the connection on which there was the request to read the attribute
@@ -2434,11 +2435,11 @@ pub struct AttReadPermitRequest {
 fn to_att_read_permit_request(
     buffer: &[u8],
 ) -> Result<AttReadPermitRequest, hci::event::Error<Stm32Wb5xError>> {
-    require_len!(buffer, 9);
+    require_len!(buffer, 8);
     Ok(AttReadPermitRequest {
         conn_handle: ConnectionHandle(LittleEndian::read_u16(&buffer[2..])),
         attribute_handle: AttributeHandle(LittleEndian::read_u16(&buffer[4..])),
-        offset: LittleEndian::read_u16(&buffer[7..]) as usize,
+        offset: LittleEndian::read_u16(&buffer[6..]) as usize,
     })
 }
 
