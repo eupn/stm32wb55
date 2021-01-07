@@ -5,6 +5,7 @@ extern crate byteorder;
 extern crate embedded_hal as hal;
 extern crate nb;
 
+use bbqueue::ArrayLength;
 use byteorder::{ByteOrder, LittleEndian};
 
 /// Vendor-specific HCI commands for the [`ActiveBlueNRG`](crate::ActiveBlueNRG).
@@ -176,7 +177,7 @@ pub trait Commands {
     fn get_anchor_period(&mut self) -> nb::Result<(), Self::Error>;
 }
 
-impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
+impl<'buf, N: ArrayLength<u8>> Commands for crate::RadioCoprocessor<'buf, N> {
     type Error = ();
 
     fn get_firmware_revision(&mut self) -> nb::Result<(), Self::Error> {

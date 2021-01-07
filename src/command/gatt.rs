@@ -5,6 +5,7 @@ extern crate byteorder;
 extern crate embedded_hal as hal;
 extern crate nb;
 
+use bbqueue::ArrayLength;
 use byteorder::{ByteOrder, LittleEndian};
 
 /// GATT-specific commands for the [`ActiveBlueNRG`](crate::ActiveBlueNRG).
@@ -870,7 +871,7 @@ pub trait Commands {
     ) -> nb::Result<(), Error<Self::Error>>;
 }
 
-impl<'buf> Commands for crate::RadioCoprocessor<'buf> {
+impl<'buf, N: ArrayLength<u8>> Commands for crate::RadioCoprocessor<'buf, N> {
     type Error = ();
 
     fn init(&mut self) -> nb::Result<(), Self::Error> {
@@ -1305,7 +1306,7 @@ pub struct AddServiceParameters {
     /// The maximum number of attribute records that can be added to this service (including the
     /// service attribute, include attribute, characteristic attribute, characteristic value
     /// attribute and characteristic descriptor attribute).
-    pub max_attribute_records: usize,
+    pub max_attribute_records: u8,
 }
 
 impl AddServiceParameters {

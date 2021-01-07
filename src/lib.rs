@@ -45,7 +45,6 @@ use core::convert::TryFrom;
 use hci::host::HciHeader;
 use hci::Controller;
 
-mod cb;
 mod command;
 pub mod event;
 mod opcode;
@@ -62,31 +61,36 @@ use stm32wb_hal::tl_mbox;
 use stm32wb_hal::tl_mbox::cmd::CmdSerial;
 use stm32wb_hal::tl_mbox::{consts::TlPacketType, shci::ShciBleInitCmdParam};
 
+use bbqueue::{ArrayLength, Consumer, Producer};
+
 const TX_BUF_SIZE: usize = core::mem::size_of::<CmdSerial>();
 
 /// Handle for interfacing with the STM32WB5x radio coprocessor.
-pub struct RadioCoprocessor<'buf> {
+pub struct RadioCoprocessor<'buf, N: ArrayLength<u8>> {
     mbox: tl_mbox::TlMbox,
     ipcc: ipcc::Ipcc,
     config: ShciBleInitCmdParam,
-    evt_buf: cb::Buffer<'buf, u8>,
+    buff_producer: Producer<'buf, N>,
+    buff_consumer: Consumer<'buf, N>,
     tx_buf: [u8; TX_BUF_SIZE],
     is_ble_ready: bool,
 }
 
-impl<'buf> RadioCoprocessor<'buf> {
+impl<'buf, N: ArrayLength<u8>> RadioCoprocessor<'buf, N> {
     /// Creates a new RadioCoprocessor instance to send commands to and receive events from.
     pub fn new(
-        buf: &mut [u8],
+        producer: Producer<'buf, N>,
+        consumer: Consumer<'buf, N>,
         mbox: tl_mbox::TlMbox,
         ipcc: ipcc::Ipcc,
         config: ShciBleInitCmdParam,
-    ) -> RadioCoprocessor {
+    ) -> RadioCoprocessor<'buf, N> {
         RadioCoprocessor {
             mbox,
             ipcc,
             config,
-            evt_buf: cb::Buffer::new(buf),
+            buff_consumer: consumer,
+            buff_producer: producer,
             tx_buf: [0u8; TX_BUF_SIZE],
             is_ble_ready: false,
         }
@@ -117,16 +121,20 @@ impl<'buf> RadioCoprocessor<'buf> {
         while let Some(evt) = self.mbox.dequeue_event() {
             let event = evt.evt();
 
-            let buf = self
-                .evt_buf
-                .next_mut_slice(evt.size().expect("Known packet kind"));
-            evt.write(buf).expect("EVT_BUF_SIZE is too small");
+            let mut buf = self
+                .buff_producer
+                .grant_exact(evt.size().expect("Known packet kind"))
+                .expect("No space in buffer");
+
+            evt.write(buf.buf()).expect("EVT_BUF_SIZE is too small");
 
             if event.kind() == 18 {
                 tl_mbox::shci::shci_ble_init(&mut self.ipcc, self.config);
                 self.is_ble_ready = true;
-                buf[0] = 0x04; // Replace event code with one that is supported by HCI
+                buf.buf()[0] = 0x04; // Replace event code with one that is supported by HCI
             }
+
+            buf.commit(evt.size().unwrap());
         }
 
         // Ignore SYS-channel "command complete" events
@@ -138,7 +146,7 @@ impl<'buf> RadioCoprocessor<'buf> {
     }
 }
 
-impl<'buf> hci::Controller for RadioCoprocessor<'buf> {
+impl<'buf, N: ArrayLength<u8>> hci::Controller for RadioCoprocessor<'buf, N> {
     type Error = ();
     type Header = bluetooth_hci::host::uart::CommandHeader;
     type Vendor = Stm32Wb5xTypes;
@@ -171,19 +179,34 @@ impl<'buf> hci::Controller for RadioCoprocessor<'buf> {
     }
 
     fn read_into(&mut self, buffer: &mut [u8]) -> nb::Result<(), Self::Error> {
-        if buffer.len() <= self.evt_buf.size() {
-            self.evt_buf.take_slice(buffer.len(), buffer);
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
+        match self.buff_consumer.read() {
+            Ok(grant) => {
+                if buffer.len() <= grant.buf().len() {
+                    buffer.copy_from_slice(&grant.buf()[..buffer.len()]);
+
+                    grant.release(buffer.len());
+
+                    Ok(())
+                } else {
+                    Err(nb::Error::WouldBlock)
+                }
+            }
+            Err(bbqueue::Error::InsufficientSize) => Err(nb::Error::WouldBlock),
+            Err(_other) => Err(nb::Error::Other(())),
         }
     }
 
     fn peek(&mut self, n: usize) -> nb::Result<u8, Self::Error> {
-        if n >= self.evt_buf.size() {
-            return Err(nb::Error::WouldBlock);
-        } else {
-            Ok(self.evt_buf.peek(n))
+        match self.buff_consumer.read() {
+            Ok(grant) => {
+                if n >= grant.buf().len() {
+                    return Err(nb::Error::WouldBlock);
+                } else {
+                    Ok(grant.buf()[n])
+                }
+            }
+            Err(bbqueue::Error::InsufficientSize) => Err(nb::Error::WouldBlock),
+            Err(_other) => Err(nb::Error::Other(())),
         }
     }
 }
