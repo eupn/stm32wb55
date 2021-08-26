@@ -51,8 +51,8 @@ const BLE_GAP_DEVICE_NAME_LENGTH: u8 = BT_NAME.len() as u8;
 
 // Setup Eddystone beacon to advertise this URL:
 // https://www.rust-lang.org
-const EDDYSTONE_URL_PREFIX: EddystoneUrlScheme = EddystoneUrlScheme::Https;
-const EDDYSTONE_URL: &[u8] = b"www.rust-lang.com";
+const EDDYSTONE_URL_PREFIX: EddystoneUrlScheme = EddystoneUrlScheme::HttpsWww;
+const EDDYSTONE_URL: &[u8] = b"rust-lang.com";
 const CALIBRATED_TX_POWER_AT_0_M: u8 = -22_i8 as u8;
 
 // Need to be at least 257 bytes to hold biggest possible HCI BLE event + header
