@@ -1495,6 +1495,10 @@ bitflags! {
     /// characteristics. Defined in Volume 3, Part G, Section 3.3.3.1 of Bluetooth Specification
     /// 4.1.
     pub struct CharacteristicProperty: u8 {
+        /// If no properties are set, this characteristic will be unavailable.
+        /// 0 is defined in ST's AN5270, but _not_ in the BT Core spec!
+        const NONE = 0x0;
+
         /// If set, permits broadcasts of the Characteristic Value using Server Characteristic
         /// Configuration Descriptor. If set, the Server Characteristic Configuration Descriptor
         /// shall exist.
@@ -1540,6 +1544,9 @@ bitflags! {
     /// [Permissions](AddCharacteristicParameter::security_permissions) available for
     /// characteristics.
     pub struct CharacteristicPermission: u8 {
+        /// No permissions assigned, neither authentication nor encryption
+        const NONE = 0x0;
+
         /// Need authentication to read.
         const AUTHENTICATED_READ = 0x01;
 
@@ -1563,6 +1570,9 @@ bitflags! {
 bitflags! {
     /// Which events may be generated when a characteristic is accessed.
     pub struct CharacteristicEvent: u8 {
+        /// No events will be notified for this attribute.
+        const NO_NOTIFY = 0x0;
+
         /// The application will be notified when a client writes to this attribute.
         const ATTRIBUTE_WRITE = 0x01;
 
@@ -1643,7 +1653,7 @@ pub struct AddDescriptorParameters<'a> {
     pub descriptor_value: &'a [u8],
 
     /// What security requirements must be met before the descriptor can be accessed.
-    pub security_permissions: DescriptorPermission,
+    pub security_permissions: CharacteristicPermission,
 
     /// What types of access are allowed for the descriptor.
     pub access_permissions: AccessPermission,
@@ -1720,27 +1730,22 @@ impl From<KnownDescriptor> for Uuid {
 }
 
 bitflags! {
-    /// Permissions available for characteristic descriptors.
-    pub struct DescriptorPermission: u8 {
-        /// Authentication required.
-        const AUTHENTICATED = 0x01;
-
-        /// Authorization required.
-        const AUTHORIZED = 0x02;
-
-        /// Encryption required.
-        const ENCRYPTED = 0x04;
-    }
-}
-
-bitflags! {
     /// Types of access for characteristic descriptors
     pub struct AccessPermission: u8 {
+        /// No permissions required
+        const NONE = 0x0;
+
         /// Readable
         const READ = 0x01;
 
         /// Writable
         const WRITE = 0x02;
+
+        /// Write without response
+        const WRITE_WO_RESP = 0x4;
+
+        /// Signed write
+        const SIGNED_WRITE = 0x8;
 
         /// Readable and writeable
         const READ_WRITE = Self::READ.bits | Self::WRITE.bits;
