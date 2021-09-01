@@ -3,12 +3,12 @@
 #![no_std]
 #![allow(non_snake_case)]
 
-extern crate panic_semihosting;
-extern crate stm32wb_hal as hal;
+use panic_halt as _;
+use stm32wb_hal as hal;
 
 use cortex_m_rt::exception;
 
-use rtfm::app;
+use rtic::app;
 
 use hal::flash::FlashExt;
 use hal::prelude::*;
@@ -233,14 +233,14 @@ const APP: () = {
         if let Ok(cmd) = cmd {
             match &cmd {
                 TlPacketType::AclData => {
-                    cortex_m_semihosting::hprintln!("Got ACL DATA cmd").unwrap();
+                    //cortex_m_semihosting::hprintln!("Got ACL DATA cmd").unwrap();
 
                     // Destination buffer: ble table, phci_acl_data_buffer, acldataserial field
                     todo!()
                 }
 
                 TlPacketType::SysCmd => {
-                    cortex_m_semihosting::hprintln!("Got SYS cmd").unwrap();
+                    //cortex_m_semihosting::hprintln!("Got SYS cmd").unwrap();
 
                     // Destination buffer: SYS table, pcmdbuffer, cmdserial field
                     todo!()
@@ -261,7 +261,7 @@ const APP: () = {
                 }
             }
         } else {
-            cortex_m_semihosting::hprintln!("Got unknown cmd 0x{:02x}", cmd_code).unwrap();
+            //cortex_m_semihosting::hprintln!("Got unknown cmd 0x{:02x}", cmd_code).unwrap();
         }
     }
 

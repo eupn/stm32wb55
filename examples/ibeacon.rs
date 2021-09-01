@@ -3,15 +3,16 @@
 #![no_std]
 #![allow(non_snake_case)]
 
-extern crate panic_reset;
-extern crate stm32wb_hal as hal;
+use panic_halt as _;
+use stm32wb_hal as hal;
 
+use bbqueue::{consts::U514, BBBuffer, ConstBBBuffer};
 use core::time::Duration;
 
 use cortex_m_rt::exception;
-use heapless::spsc::{MultiCore, Queue};
+use heapless::spsc::Queue;
 use nb::block;
-use rtfm::app;
+use rtic::app;
 
 use hal::{
     flash::FlashExt,
@@ -47,8 +48,7 @@ use stm32wb55::{
     RadioCoprocessor,
 };
 
-pub type HciCommandsQueue =
-    Queue<fn(&mut RadioCoprocessor<'static>, &BleContext), heapless::consts::U32, u8, MultiCore>;
+pub type HciCommandsQueue = Queue<fn(&mut RadioCoprocessor<'static, U514>, &BleContext), 32>;
 
 // Apple iBeacon UUID specific for your application.
 // You can use https://yupana-engineering.com/online-uuid-to-c-array-converter to convert
@@ -62,10 +62,7 @@ const ADV_INTERVAL_MS: u64 = 250;
 
 /// TX power at 0 m range. Used for range approximation.
 const CALIBRATED_TX_POWER_AT_0_M: u8 = 193;
-
-// Need to be at least 257 bytes to hold biggest possible HCI BLE event + header
-const BLE_DATA_BUF_SIZE: usize = 257 * 2;
-const BLE_GAP_DEVICE_NAME_LENGTH: u8 = 7;
+const BLE_GAP_DEVICE_NAME: &[u8] = b"BEACON";
 
 #[derive(Debug, Default)]
 pub struct BleContext {
@@ -77,15 +74,13 @@ pub struct BleContext {
 #[app(device = stm32wb_hal::pac, peripherals = true)]
 const APP: () = {
     struct Resources {
-        rc: RadioCoprocessor<'static>,
+        rc: RadioCoprocessor<'static, U514>,
         hci_commands_queue: HciCommandsQueue,
         ble_context: BleContext,
     }
 
     #[init]
     fn init(cx: init::Context) -> init::LateResources {
-        static mut BLE_DATA_BUF: [u8; BLE_DATA_BUF_SIZE] = [0u8; BLE_DATA_BUF_SIZE];
-
         let dp = cx.device;
         let mut rcc = dp.RCC.constrain();
         rcc.set_stop_wakeup_clock(StopWakeupClock::HSI16);
@@ -143,11 +138,13 @@ const APP: () = {
             ll_only: 0,
             hw_version: 0,
         };
-        let rc = RadioCoprocessor::new(&mut BLE_DATA_BUF[..], mbox, ipcc, config);
+        static BB: BBBuffer<U514> = BBBuffer(ConstBBBuffer::new());
+        let (producer, consumer) = BB.try_split().unwrap();
+        let rc = RadioCoprocessor::new(producer, consumer, mbox, ipcc, config);
 
         init::LateResources {
             rc,
-            hci_commands_queue: HciCommandsQueue::u8(),
+            hci_commands_queue: HciCommandsQueue::new(),
             ble_context: BleContext::default(),
         }
     }
@@ -181,7 +178,7 @@ const APP: () = {
         }
     }
 
-    /// Sets up Eddystone BLE beacon service.
+    /// Sets up beacon service.
     #[task(resources = [rc, hci_commands_queue], spawn = [exec_hci])]
     fn setup(mut cx: setup::Context) {
         cx.resources
@@ -330,7 +327,7 @@ fn init_gap_and_gatt(hci_commands_queue: &mut HciCommandsQueue) {
         .ok();
     hci_commands_queue
         .enqueue(|rc, _| {
-            rc.init_gap(Role::PERIPHERAL, false, BLE_GAP_DEVICE_NAME_LENGTH)
+            rc.init_gap(Role::PERIPHERAL, false, BLE_GAP_DEVICE_NAME.len() as u8)
                 .expect("GAP init")
         })
         .ok();
@@ -340,7 +337,7 @@ fn init_gap_and_gatt(hci_commands_queue: &mut HciCommandsQueue) {
                 service_handle: cx.service_handle.expect("service handle to be set"),
                 characteristic_handle: cx.dev_name_handle.expect("dev name handle to be set"),
                 offset: 0,
-                value: b"BEACON",
+                value: BLE_GAP_DEVICE_NAME,
             })
             .unwrap()
         })
